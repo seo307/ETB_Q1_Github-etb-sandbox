@@ -1,0 +1,57 @@
+name: ETB Q1C Exploratory One Issue (NO Q1 Promotion)
+on:
+  workflow_dispatch:
+    inputs:
+      nonce:
+        description: "32-char frozen trial nonce (not a secret)"
+        required: true
+        type: string
+      frozen_at_utc:
+        description: "Exact frozen_at_local_utc from frozen trial JSON"
+        required: true
+        type: string
+      trial_sha256:
+        description: "SHA-256 of immutable trial JSON"
+        required: true
+        type: string
+      pre_capture_sha256:
+        description: "SHA-256 of pre CAPTURE_MANIFEST.json"
+        required: true
+        type: string
+      authorization:
+        description: "Exact YES_ONE_ISSUE_ONLY acknowledges ONE Issue in dedicated public sandbox"
+        required: true
+        type: string
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: etb-q1c-one-issue-sandbox
+  cancel-in-progress: false
+jobs:
+  single-exploratory-write:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout reviewed sandbox actor source without persisted token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Enforce frozen trial binding and create AT MOST ONE synthetic Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          Q1C_NONCE: ${{ inputs.nonce }}
+          Q1C_FROZEN_AT: ${{ inputs.frozen_at_utc }}
+          Q1C_PLAN_SHA256: ${{ inputs.trial_sha256 }}
+          Q1C_PRE_SHA256: ${{ inputs.pre_capture_sha256 }}
+          Q1C_CONFIRM: ${{ inputs.authorization }}
+        run: |
+          python3 actor/github_issue_once.py --execute --out q1c_actor_receipt.json
+      - name: Upload machine-readable actor receipt even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: etb-q1c-actor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: q1c_actor_receipt.json
+          if-no-files-found: warn
+          retention-days: 30
